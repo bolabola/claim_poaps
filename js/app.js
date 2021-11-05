@@ -32,9 +32,13 @@ function logit(dom, msg) {
 }
 
 $(document).ready(function () {
+    let addresses = window.localStorage.getItem('addresses');
+    if(addresses){
+        $("#addresses").val(addresses);
+    }
     $('#claim').submit(async function (e) {
         e.preventDefault();
-        let addresses = $("#addresses").val().trim();
+        addresses = $("#addresses").val().trim();
         let links = $("#links").val().trim();
         let totalClaimed = 0;
         if (addresses == '') {
@@ -47,6 +51,7 @@ $(document).ready(function () {
             $("#links").focus();
             return;
         }
+        window.localStorage.setItem('addresses',addresses);
         addresses = addresses.split("\n");
         links = links.split("\n");
         document.getElementById("log").value = "";
