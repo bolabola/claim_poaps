@@ -1,95 +1,115 @@
-
-const claim_url = 'https://api.poap.xyz/actions/claim-qr'
-
-let synchronous_request = function (url, params) {
-    if (params == undefined) {
-        return new Promise(function (resolve, reject) {
-            axios.get(url).then(res => {
-                resolve(res.data);
-            }).catch(err => {
-                reject(err)
-            });
+let allEvents = [];
+function getAllDeliveries() {
+    return new Promise((resolve) => {
+        allEvents = [];
+        axios.get('https://frontend.poap.tech/deliveries?limit=1000&offset=0').then(res => {
+            let events = [];
+            for (let event of res.data.deliveries) {
+                events.push(event);
+                allEvents.push(event.id);
+            }
+            resolve(events)
+        }).catch(err => {
+            resolve([])
         })
-    } else {
-        return new Promise(function (resolve, reject) {
-            axios.post(url, params).then(res => {
-                resolve(res.data);
-            }).catch(err => {
-                reject(err);
-            });
+    })
+}
+function isValidDelivery(eventId) {
+    return new Promise((resolve) => {
+        axios.get(`https://api.poap.xyz/delivery/${eventId}`).then(res => {
+            let claimedAddress = res.data.claimed_addresses;
+            if (claimedAddress > 0) {
+                resolve(true);
+            }
+            resolve(false)
+        }).catch(err => {
+            resolve(false);
         })
-    }
+    })
+}
+function claim(event, address) {
+    return new Promise((resolve) => {
+        axios.post(`https://api.poap.xyz/actions/claim-delivery-v2`, {
+            address: address,
+            id: event.id
+        }).then(res => {
+            document.getElementById('deliveries').innerHTML += `<div class="col-lg-4 col-md-4 col-sm-4 col-xs-12">
+                    <div class="box-part text-center">
+                    <span class="badge badge-primary">Just Claimed</span>
+                        <a href="https://poap.delivery/${event.slug}">
+                            <img src="${event.image}" style="width:100px;height:100px;border-radius: 50%;">
+                        </a>
+                        <div class="title">
+                            <h4>${event.card_title}</h4>
+                        </div>
+                        <div id='${event.id}'></div>
+                    </div>
+                </div>`
+            resolve(res.data.queue_uid);
+        }).catch(err => {
+            resolve('');
+        })
+    });
 }
 
-function logit(dom, msg) {
-    if ((msg == undefined) || (msg == null) || (msg == '')) {
-        return;
-    }
-    var d = new Date();
-    var n = d.toLocaleTimeString();
-    var s = dom.val();
-    dom.val((s + "\n" + n + ": " + msg).trim());
+function getQueueIdStatus(event, queueId) {
+    return new Promise((resolve) => {
+        axios.get(`https://api.poap.xyz/queue-message/${queueId}`).then((res) => {
+            let status = res.data.status;
+            if (status == 'FINISH') {
+                let transactionId = res.data.result.tx_hash;
+                $(`#${event.id}`).html(`<a href='https://blockscout.com/xdai/mainnet/tx/${transactionId}' target="_blank" class="btn btn-success">CLAIMED</a>`);
+                resolve(true)
+            } else {
+                $(`#${event.id}`).html(`<a href='https://poap.delivery/${event.slug}' target="_blank" class="btn btn-warning">${status}</a>`);
+                resolve(false)
+            }
+        }).catch(err => {
+            resolve(true)
+        })
+    });
+}
+
+function getMyDeliveries(event, address) {
+    axios.get(`https://anyplace-cors.herokuapp.com/https://api.poap.xyz/delivery-addresses/${event.id}/address/${address}`).then(async (res) => {
+        let isClaimed = res.data.claimed;
+        allEvents = allEvents.filter(item => item != event.id);
+        $('#checkMsg').html(allEvents.length > 0 ? `<p>${allEvents.length} Deliveries Remaining to Check...</p>` : '');
+        if (!isClaimed) {
+            let startDate = new Date(res.data.events[0].start_date);
+            let expiryDate = new Date(res.data.events[0].expiry_date);
+            let isValid = await isValidDelivery(event.id);
+            let current = new Date();
+            if (current > startDate && current < expiryDate && isValid) {
+                let queueId = await claim(event, address);
+                await getQueueIdStatus(event, queueId);
+                const status = setInterval(async function checkStatus() {
+                    let isCompleted = await getQueueIdStatus(event, queueId);
+                    if (isCompleted) {
+                        clearInterval(status);
+                    }
+                }, 3000);
+            }
+        }
+    }).catch(err => {
+        allEvents = allEvents.filter(item => item != event.id);
+        $('#checkMsg').html(allEvents.length > 0 ? `<p>${allEvents.length} Deliveries Remaining to Check...</p>` : '');
+    })
 }
 
 $(document).ready(function () {
-    let addresses = window.localStorage.getItem('addresses');
-    if(addresses){
-        $("#addresses").val(addresses);
-    }
-    $('#claim').submit(async function (e) {
+    $('#claimButton').submit(async function (e) {
         e.preventDefault();
-        addresses = $("#addresses").val().trim();
-        let links = $("#links").val().trim();
-        let totalClaimed = 0;
-        if (addresses == '') {
-            alert('Please enter addresses.');
-            $("#addresses").focus();
+        let address = $('#address').val().trim();
+        if (!address) {
+            alert("Please Enter Ethereum Address or ENS Name!");
+            $("#address").focus();
             return;
         }
-        if (links == '') {
-            alert('Please enter claim links.');
-            $("#links").focus();
-            return;
+        $('#deliveries').html('');
+        let events = await getAllDeliveries();
+        for (let event of events) {
+            getMyDeliveries(event, address);
         }
-        window.localStorage.setItem('addresses',addresses);
-        addresses = addresses.split("\n");
-        links = links.split("\n");
-        document.getElementById("log").value = "";
-        logit($('#log'), `Starting...`);
-        for (let link of links) {
-            if (link) {
-                let isClaimed = false;
-                let a = link.split('/');
-                let qr_hash = a[a.length - 1];
-                let url = claim_url + '?qr_hash=' + qr_hash;
-                let o = await synchronous_request(url)
-                if (o.claimed == false) {
-                    for (let address of addresses) {
-                        if (!isClaimed && address) {
-                            await synchronous_request(claim_url, {
-                                qr_hash: o.qr_hash,
-                                address: address,
-                                secret: o.secret,
-                            }).then(
-                                res => {
-                                    logit($('#log'), `${address} claimed POAP[${o.qr_hash}]`);
-                                    isClaimed = true;
-                                    totalClaimed++;
-                                }
-                            ).catch(err => {
-                                console.log(`[${address}] ${err.response.data.message} POAP[${o.qr_hash}]`);
-                            })
-                        }
-                    }
-
-                } else {
-                    logit($('#log'), `[${o.beneficiary}] had claimed this POAP[${qr_hash}]`);
-                }
-            }
-        }
-        logit($('#log'), `Claiming completed. Claimed ${totalClaimed} POAPs`);
-
-
     });
-
 });

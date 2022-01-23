@@ -1,0 +1,68 @@
+body {
+    background: #eee;
+}
+
+.box {
+    padding: 60px 0px;
+}
+
+.box-part {
+    background   : #FFF;
+    border-radius: 0;
+    padding      : 60px 10px;
+    margin       : 30px 0px;
+}
+.badge {
+    position: absolute;
+    top     : 30px;
+    right   : 15px;
+}
+.text {
+    margin: 20px 0px;
+}
+
+.fa {
+    color: #4183D7;
+}
+
+.form-control-borderless {
+    border: none;
+}
+
+.form-control-borderless:hover,
+.form-control-borderless:active,
+.form-control-borderless:focus {
+    border    : none;
+    outline   : none;
+    box-shadow: none;
+}
+
+.includer {
+    position: relative;
+}
+
+.title-header:before {
+    border-top: 2px solid #4183D7;
+    content   : "";
+    left      : 0;
+    position  : absolute;
+    right     : 0;
+    top       : 50%;
+}
+
+.title-header h5 {
+    background    : #fff;
+    color         : #363636;
+    display       : inline-block;
+    font-weight   : 600;
+    line-height   : 40px;
+    margin        : 0;
+    padding       : 0 30px;
+    position      : relative;
+    text-transform: uppercase;
+    border        : 2px solid #4183D7;
+}
+
+p {
+    text-align: center;
+}
